@@ -1,8 +1,3 @@
-bash
-
-cat /mnt/user-data/outputs/wildlife-journal.jsx
-Output
-
 import { useState } from "react";
 
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
