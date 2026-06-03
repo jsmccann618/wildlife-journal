@@ -3,9 +3,9 @@ bash
 cat /mnt/user-data/outputs/wildlife-journal.jsx
 Output
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 
-const OPENROUTER_API_KEY = "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";
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 const AI_MODEL = "meta-llama/llama-4-maverick:free";
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
