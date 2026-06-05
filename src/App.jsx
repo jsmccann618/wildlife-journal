@@ -70,7 +70,7 @@ Respond ONLY with a valid JSON object in this exact format, no other text:
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://wildlife-journal.app",
+      "HTTP-Referer": "https://wildlife-journal.vercel.app,
       "X-Title": "Wildlife Journal",
     },
     body: JSON.stringify({
