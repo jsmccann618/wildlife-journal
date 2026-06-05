@@ -80,7 +80,7 @@ Respond ONLY with a valid JSON object in this exact format, no other text:
         role: "user",
         content: [
           { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: base64Image } },
+          { type: "image_url", image_url: { url: compressed } },
         ],
       }],
     }),
