@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+const OPENROUTER_API_KEY = "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";
 const AI_MODEL = "meta-llama/llama-4-maverick:free";
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
