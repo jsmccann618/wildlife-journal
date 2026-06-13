@@ -1,7 +1,5 @@
 import { useState } from "react";
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
-const AI_MODEL = "meta-llama/llama-4-maverick:free";
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
 const CATEGORY_ICONS = { Birds: "🐦", Critters: "🐾", Butterflies: "🦋" };
@@ -49,39 +47,6 @@ const FUN_FACTS = {
 function getRandomFact(category) {
   const facts = FUN_FACTS[category];
   return facts[Math.floor(Math.random() * facts.length)];
-}
-
-async function compressImage(dataUrl, maxWidth = 800) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const scale = Math.min(1, maxWidth / img.width);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.src = dataUrl;
-  });
-}
-
-async function analyzeImageWithAI(base64Image, category) {
-  const compressed = await compressImage(base64Image);
-
-  const response = await fetch("/api/identify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: compressed, category }),
-  });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || `API error: ${response.status}`);
-  }
-
-  return await response.json();
 }
 
 function Lightbox({ photos, startIndex, onClose }) {
@@ -134,39 +99,6 @@ function DragToReposition({ image, position, onChange, accent, light }) {
   );
 }
 
-function AIResultBanner({ result, colors, onAccept, onDismiss }) {
-  return (
-    <div style={{ background: `linear-gradient(135deg, ${colors.card}, #0a0a1a)`, border: `2px solid ${colors.accent}`, borderRadius: "16px", padding: "16px", marginBottom: "16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-        <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "18px", color: colors.accent }}>
-          🤖 AI Identified!
-        </div>
-        <span style={{ background: result.confidence === "High" ? "#4ade8044" : result.confidence === "Medium" ? "#fbbf2444" : "#ff444444", color: result.confidence === "High" ? "#4ade80" : result.confidence === "Medium" ? "#fbbf24" : "#ff4444", borderRadius: "20px", padding: "2px 10px", fontSize: "11px", fontFamily: "'Nunito', sans-serif", fontWeight: "700" }}>
-          {result.confidence} Confidence
-        </span>
-      </div>
-      <div style={{ fontFamily: "'Nunito', sans-serif", marginBottom: "8px" }}>
-        <div style={{ fontSize: "18px", fontWeight: "800", color: "#fff" }}>{result.species}</div>
-        <div style={{ fontSize: "12px", color: "#888", fontStyle: "italic" }}>{result.scientificName}</div>
-      </div>
-      <div style={{ fontSize: "12px", color: colors.light, background: `${colors.accent}11`, borderRadius: "10px", padding: "8px 12px", marginBottom: "8px", fontFamily: "'Nunito', sans-serif", lineHeight: 1.5 }}>
-        💡 {result.funFact}
-      </div>
-      <div style={{ fontSize: "12px", color: "#aaa", fontFamily: "'Nunito', sans-serif", marginBottom: "12px", lineHeight: 1.4 }}>
-        🍽️ <strong style={{ color: colors.light }}>Feeding tip:</strong> {result.foodTip}
-      </div>
-      <div style={{ display: "flex", gap: "8px" }}>
-        <button onClick={onAccept} style={{ flex: 2, background: `linear-gradient(135deg, ${colors.accent}, ${colors.light})`, border: "none", borderRadius: "10px", color: "#000", padding: "10px", cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "15px" }}>
-          ✅ Use This Info
-        </button>
-        <button onClick={onDismiss} style={{ flex: 1, background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: "10px", color: "#fff", padding: "10px", cursor: "pointer", fontFamily: "'Nunito', sans-serif", fontSize: "13px" }}>
-          Dismiss
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function AnimalCard({ animal, onEdit, onDelete }) {
   const colors = CATEGORY_COLORS[animal.category];
   const [flipped, setFlipped] = useState(false);
@@ -183,11 +115,6 @@ function AnimalCard({ animal, onEdit, onDelete }) {
           {allPhotos.length > 1 && (
             <div onClick={e => { e.stopPropagation(); setLightboxIdx(0); }} style={{ position: "absolute", bottom: "8px", left: "8px", background: "rgba(0,0,0,0.7)", borderRadius: "12px", padding: "3px 10px", fontSize: "11px", color: "#fff", fontFamily: "'Nunito', sans-serif", fontWeight: "700", cursor: "pointer" }}>
               📸 {allPhotos.length} photos
-            </div>
-          )}
-          {animal.aiIdentified && (
-            <div style={{ position: "absolute", bottom: "8px", right: "8px", background: "rgba(0,0,0,0.7)", borderRadius: "12px", padding: "3px 8px", fontSize: "11px", color: "#4ade80", fontFamily: "'Nunito', sans-serif", fontWeight: "700" }}>
-              🤖 AI
             </div>
           )}
         </div>
@@ -238,44 +165,17 @@ function AddEditModal({ animal, category, onSave, onClose }) {
     firstSeen: new Date().toLocaleDateString(),
     frequency: "Occasional", favoriteFood: [],
     usesBath: false, notes: "", image: null, imgPos: { x: 50, y: 50 },
-    extraPhotos: [], funFact: getRandomFact(category), aiIdentified: false,
+    extraPhotos: [], funFact: getRandomFact(category),
   });
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResult, setAiResult] = useState(null);
-  const [aiError, setAiError] = useState(null);
 
-  const handleMainImage = async (e) => {
+  const handleMainImage = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const dataUrl = ev.target.result;
-      setForm(f => ({ ...f, image: dataUrl }));
-      // Auto-trigger AI analysis
-      setAiLoading(true);
-      setAiError(null);
-      setAiResult(null);
-      try {
-        const result = await analyzeImageWithAI(dataUrl, category);
-        setAiResult(result);
-      } catch (err) {
-        setAiError("Error: " + err.message);
-      } finally {
-        setAiLoading(false);
-      }
+    reader.onload = (ev) => {
+      setForm(f => ({ ...f, image: ev.target.result }));
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleAcceptAI = () => {
-    setForm(f => ({
-      ...f,
-      name: aiResult.species,
-      scientificName: aiResult.scientificName,
-      funFact: aiResult.funFact,
-      aiIdentified: true,
-    }));
-    setAiResult(null);
   };
 
   const handleExtraPhotos = (e) => {
@@ -305,29 +205,10 @@ function AddEditModal({ animal, category, onSave, onClose }) {
             </div>
             <input type="file" accept="image/*" onChange={handleMainImage} style={{ display: "none" }} />
             <div style={{ color: colors.accent, fontSize: "12px", marginTop: "6px", fontFamily: "'Nunito', sans-serif" }}>
-              {form.image ? "Tap to change photo" : "📸 Tap to add photo — AI will identify it!"}
+              {form.image ? "Tap to change photo" : "📸 Tap to add photo"}
             </div>
           </label>
         </div>
-
-        {/* AI Loading */}
-        {aiLoading && (
-          <div style={{ background: `${colors.accent}11`, border: `1px solid ${colors.accent}44`, borderRadius: "14px", padding: "16px", marginBottom: "16px", textAlign: "center" }}>
-            <div style={{ fontSize: "28px", marginBottom: "8px" }}>🤖</div>
-            <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "16px", color: colors.accent }}>AI is identifying your photo...</div>
-            <div style={{ fontSize: "12px", color: "#888", fontFamily: "'Nunito', sans-serif", marginTop: "4px" }}>Analyzing species, generating fun facts...</div>
-          </div>
-        )}
-
-        {/* AI Error */}
-        {aiError && (
-          <div style={{ background: "#ff444411", border: "1px solid #ff444444", borderRadius: "14px", padding: "12px", marginBottom: "16px", fontFamily: "'Nunito', sans-serif", fontSize: "13px", color: "#ff8888", textAlign: "center" }}>
-            ⚠️ {aiError}
-          </div>
-        )}
-
-        {/* AI Result */}
-        {aiResult && <AIResultBanner result={aiResult} colors={colors} onAccept={handleAcceptAI} onDismiss={() => setAiResult(null)} />}
 
         {/* Drag reposition */}
         {form.image && <DragToReposition image={form.image} position={form.imgPos || { x: 50, y: 50 }} onChange={(pos) => setForm(f => ({ ...f, imgPos: pos }))} accent={colors.accent} light={colors.light} />}
@@ -415,9 +296,9 @@ function AddEditModal({ animal, category, onSave, onClose }) {
 export default function WildlifeJournal() {
   const [activeCategory, setActiveCategory] = useState("Birds");
   const [animals, setAnimals] = useState([
-    { id: 1, name: "American Robin", nickname: "", scientificName: "Turdus migratorius", category: "Birds", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Peanut Butter Suet"], usesBath: true, notes: "Super special — uses the feeder AND the bird bath! Very unusual for a robin.", image: null, extraPhotos: [], funFact: "Robins can hear earthworms moving underground.", aiIdentified: false },
-    { id: 2, name: "Mourning Dove", nickname: "Professor Poopy Pants", scientificName: "Zenaida macroura", category: "Birds", firstSeen: "Before 2026", frequency: "Daily", favoriteFood: ["Mixed Seed"], usesBath: false, notes: "Partner showed up too — was likely nesting nearby this whole time! 🥹", image: null, extraPhotos: [], funFact: "Mourning doves mate for life.", aiIdentified: false },
-    { id: 3, name: "Eastern Gray Squirrel", nickname: "", scientificName: "Sciurus carolinensis", category: "Critters", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Sunflower Seeds"], usesBath: false, notes: "Was caught soaking its head in the brand new bird bath on day one!", image: null, extraPhotos: [], funFact: "Squirrels forget where they bury about half their nuts!", aiIdentified: false },
+    { id: 1, name: "American Robin", nickname: "", scientificName: "Turdus migratorius", category: "Birds", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Peanut Butter Suet"], usesBath: true, notes: "Super special — uses the feeder AND the bird bath! Very unusual for a robin.", image: null, extraPhotos: [], funFact: "Robins can hear earthworms moving underground." },
+    { id: 2, name: "Mourning Dove", nickname: "Professor Poopy Pants", scientificName: "Zenaida macroura", category: "Birds", firstSeen: "Before 2026", frequency: "Daily", favoriteFood: ["Mixed Seed"], usesBath: false, notes: "Partner showed up too — was likely nesting nearby this whole time! 🥹", image: null, extraPhotos: [], funFact: "Mourning doves mate for life." },
+    { id: 3, name: "Eastern Gray Squirrel", nickname: "", scientificName: "Sciurus carolinensis", category: "Critters", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Sunflower Seeds"], usesBath: false, notes: "Was caught soaking its head in the brand new bird bath on day one!", image: null, extraPhotos: [], funFact: "Squirrels forget where they bury about half their nuts!" },
   ]);
   const [showModal, setShowModal] = useState(false);
   const [editAnimal, setEditAnimal] = useState(null);
@@ -445,7 +326,6 @@ export default function WildlifeJournal() {
           <div style={{ fontSize: "48px", marginBottom: "8px" }}>🌿</div>
           <h1 style={{ fontFamily: "'Fredoka One', cursive", fontSize: "clamp(28px, 6vw, 42px)", background: `linear-gradient(135deg, ${colors.accent}, ${colors.light})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 4px 0", lineHeight: 1.1 }}>My Wildlife Journal</h1>
           <p style={{ color: "#888", fontSize: "14px", margin: "0 0 4px 0" }}>Front Garden Nature Diary 🪟</p>
-          <p style={{ color: "#555", fontSize: "11px", margin: "0 0 16px 0" }}>🤖 AI-Powered Species Identification</p>
 
           {/* Stats */}
           <div style={{ display: "inline-flex", gap: "20px", background: "#ffffff08", border: "1px solid #ffffff11", borderRadius: "20px", padding: "10px 24px", marginBottom: "24px" }}>
@@ -503,7 +383,7 @@ export default function WildlifeJournal() {
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
               <div style={{ fontSize: "64px", marginBottom: "16px" }}>{CATEGORY_ICONS[activeCategory]}</div>
               <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "22px", color: colors.accent, marginBottom: "8px" }}>No {activeCategory} yet!</div>
-              <div style={{ fontSize: "14px" }}>Add your first {activeCategory.slice(0, -1).toLowerCase()} — AI will identify it from your photo! 🤖</div>
+              <div style={{ fontSize: "14px" }}>Add your first {activeCategory.slice(0, -1).toLowerCase()} to get started!</div>
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "16px", marginBottom: "24px" }}>
@@ -513,7 +393,7 @@ export default function WildlifeJournal() {
             </div>
           )}
 
-          {filtered.length > 0 && <p style={{ textAlign: "center", color: "#555", fontSize: "12px", marginBottom: "20px" }}>💡 Tap any card to reveal a fun fact • 📸 Tap photo count to view gallery • 🤖 AI identifies new photos automatically</p>}
+          {filtered.length > 0 && <p style={{ textAlign: "center", color: "#555", fontSize: "12px", marginBottom: "20px" }}>💡 Tap any card to reveal a fun fact • 📸 Tap photo count to view gallery</p>}
 
           <div style={{ textAlign: "center" }}>
             <button onClick={() => { setEditAnimal(null); setShowModal(true); }} style={{ background: `linear-gradient(135deg, ${colors.accent}, ${colors.light})`, border: "none", borderRadius: "50px", padding: "16px 36px", color: "#000", fontFamily: "'Fredoka One', cursive", fontSize: "20px", cursor: "pointer", boxShadow: `0 8px 32px ${colors.accent}44` }}>
