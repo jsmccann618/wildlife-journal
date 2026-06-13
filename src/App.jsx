@@ -1,16 +1,32 @@
 import { useState, useEffect } from "react";
 import { db, storage } from "./firebase";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-const CATEGORIES = ["Birds", "Critters", "Butterflies"];
-const CATEGORY_ICONS = { Birds: "🐦", Critters: "🐾", Butterflies: "🦋" };
-const CATEGORY_COLORS = {
-  Birds: { bg: "#1a3a2a", accent: "#4ade80", light: "#bbf7d0", card: "#14532d" },
-  Critters: { bg: "#3a2a1a", accent: "#fb923c", light: "#fed7aa", card: "#7c2d12" },
-  Butterflies: { bg: "#2a1a3a", accent: "#c084fc", light: "#e9d5ff", card: "#581c87" },
-};
+const DEFAULT_TABS = [
+  { name: "Birds", icon: "🐦", bg: "#1a3a2a", accent: "#4ade80", light: "#bbf7d0", card: "#14532d" },
+  { name: "Critters", icon: "🐾", bg: "#3a2a1a", accent: "#fb923c", light: "#fed7aa", card: "#7c2d12" },
+  { name: "Butterflies", icon: "🦋", bg: "#2a1a3a", accent: "#c084fc", light: "#e9d5ff", card: "#581c87" },
+];
+
+const TAB_COLOR_PRESETS = [
+  { bg: "#1a3a2a", accent: "#4ade80", light: "#bbf7d0", card: "#14532d" },
+  { bg: "#3a2a1a", accent: "#fb923c", light: "#fed7aa", card: "#7c2d12" },
+  { bg: "#2a1a3a", accent: "#c084fc", light: "#e9d5ff", card: "#581c87" },
+  { bg: "#1a2a3a", accent: "#60a5fa", light: "#bfdbfe", card: "#1e3a5f" },
+  { bg: "#3a1a2a", accent: "#f472b6", light: "#fbcfe8", card: "#831843" },
+  { bg: "#2a3a1a", accent: "#facc15", light: "#fef08a", card: "#713f12" },
+];
+function getTabColors(tabs, name) {
+  const tab = tabs.find(t => t.name === name);
+  return tab ? { bg: tab.bg, accent: tab.accent, light: tab.light, card: tab.card } : { bg: "#1a3a2a", accent: "#4ade80", light: "#bbf7d0", card: "#14532d" };
+}
+function getTabIcon(tabs, name) {
+  const tab = tabs.find(t => t.name === name);
+  return tab ? tab.icon : "🐾";
+}
+
 const FOOD_OPTIONS = {
   Birds: ["Safflower Seed", "Peanut Butter Suet", "Fruit Suet", "Sunflower Seeds", "Whole Peanuts", "Mixed Seed", "Mealworms", "Nectar"],
   Critters: ["Corn", "Sunflower Seeds", "Peanuts", "Mixed Nuts", "Fruit", "Water", "Acorns", "Berries"],
@@ -126,8 +142,8 @@ function DragToReposition({ image, position, onChange, accent, light }) {
   );
 }
 
-function AnimalCard({ animal, onEdit, onDelete }) {
-  const colors = CATEGORY_COLORS[animal.category];
+function AnimalCard({ animal, onEdit, onDelete, tabs }) {
+  const colors = getTabColors(tabs, animal.category);
   const [flipped, setFlipped] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const allPhotos = [...(animal.image ? [animal.image] : []), ...(animal.extraPhotos || [])];
@@ -137,7 +153,7 @@ function AnimalCard({ animal, onEdit, onDelete }) {
       {lightboxIdx !== null && <Lightbox photos={allPhotos} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />}
       <div onClick={() => setFlipped(!flipped)} style={{ cursor: "pointer", borderRadius: "20px", overflow: "hidden", background: flipped ? `linear-gradient(135deg, ${colors.card}, ${colors.bg})` : `linear-gradient(135deg, #1e1e2e, #2a2a3e)`, border: `2px solid ${colors.accent}33`, boxShadow: `0 8px 32px ${colors.accent}22`, transition: "all 0.3s ease", transform: flipped ? "scale(1.02)" : "scale(1)", position: "relative", minHeight: "280px" }}>
         <div style={{ height: "140px", background: mainPhoto ? `url(${mainPhoto}) ${animal.imgPos ? animal.imgPos.x + '% ' + animal.imgPos.y + '%' : '50% 30%'}/cover no-repeat` : `linear-gradient(135deg, ${colors.card}88, ${colors.bg})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "64px", position: "relative" }}>
-          {!mainPhoto && <span style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}>{CATEGORY_ICONS[animal.category]}</span>}
+          {!mainPhoto && <span style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}>{getTabIcon(tabs, animal.category)}</span>}
           <div style={{ position: "absolute", top: "10px", right: "10px", background: colors.accent, borderRadius: "20px", padding: "2px 10px", fontSize: "11px", fontWeight: "700", color: "#000", fontFamily: "'Fredoka One', cursive" }}>{animal.frequency}</div>
           {allPhotos.length > 1 && (
             <div onClick={e => { e.stopPropagation(); setLightboxIdx(0); }} style={{ position: "absolute", bottom: "8px", left: "8px", background: "rgba(0,0,0,0.7)", borderRadius: "12px", padding: "3px 10px", fontSize: "11px", color: "#fff", fontFamily: "'Nunito', sans-serif", fontWeight: "700", cursor: "pointer" }}>
@@ -155,7 +171,7 @@ function AnimalCard({ animal, onEdit, onDelete }) {
         <div style={{ padding: "14px 16px 40px" }}>
           {!flipped ? (<>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "20px" }}>{CATEGORY_ICONS[animal.category]}</span>
+              <span style={{ fontSize: "20px" }}>{getTabIcon(tabs, animal.category)}</span>
               <div>
                 <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "20px", color: colors.accent, lineHeight: 1 }}>{animal.nickname || animal.name}</div>
                 {animal.nickname && <div style={{ fontSize: "11px", color: "#888", fontFamily: "'Nunito', sans-serif" }}>aka {animal.name}</div>}
@@ -185,8 +201,8 @@ function AnimalCard({ animal, onEdit, onDelete }) {
   );
 }
 
-function AddEditModal({ animal, category, onSave, onClose }) {
-  const colors = CATEGORY_COLORS[category];
+function AddEditModal({ animal, category, onSave, onClose, tabs }) {
+  const colors = getTabColors(tabs, category);
   const [form, setForm] = useState(animal || {
     name: "", nickname: "", scientificName: "", category,
     firstSeen: new Date().toLocaleDateString(),
@@ -225,7 +241,7 @@ function AddEditModal({ animal, category, onSave, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
       <div style={{ background: "#1a1a2e", border: `2px solid ${colors.accent}`, borderRadius: "24px", padding: "28px", width: "100%", maxWidth: "480px", maxHeight: "85vh", overflowY: "auto", boxShadow: `0 0 60px ${colors.accent}44` }}>
         <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "28px", color: colors.accent, marginBottom: "20px", textAlign: "center" }}>
-          {CATEGORY_ICONS[category]} {animal ? "Edit" : "Add New"} {category.slice(0, -1)}
+          {getTabIcon(tabs, category)} {animal ? "Edit" : "Add New"} {category.slice(0, -1)}
         </div>
 
         {/* Main photo upload */}
@@ -330,18 +346,114 @@ const SEED_ANIMALS = [
   { name: "Eastern Gray Squirrel", nickname: "", scientificName: "Sciurus carolinensis", category: "Critters", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Sunflower Seeds"], usesBath: false, notes: "Was caught soaking its head in the brand new bird bath on day one!", image: null, extraPhotos: [], funFact: "Squirrels forget where they bury about half their nuts!" },
 ];
 
+
+function ManageTabsModal({ tabs, onSave, onClose }) {
+  const [localTabs, setLocalTabs] = useState(tabs);
+  const [newName, setNewName] = useState("");
+  const [newIcon, setNewIcon] = useState("🦎");
+  const [selectedColor, setSelectedColor] = useState(0);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const handleDelete = (name) => {
+    setDeleteConfirm(name);
+  };
+
+  const confirmDelete = () => {
+    setLocalTabs(prev => prev.filter(t => t.name !== deleteConfirm));
+    setDeleteConfirm(null);
+  };
+
+  const handleAdd = () => {
+    if (!newName.trim()) return alert("Please enter a tab name!");
+    if (localTabs.find(t => t.name === newName.trim())) return alert("A tab with that name already exists!");
+    const colors = TAB_COLOR_PRESETS[selectedColor];
+    setLocalTabs(prev => [...prev, { name: newName.trim(), icon: newIcon, ...colors }]);
+    setNewName("");
+    setNewIcon("🦎");
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
+      <div style={{ background: "#1a1a2e", border: "2px solid #4ade80", borderRadius: "24px", padding: "28px", width: "100%", maxWidth: "480px", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 0 60px #4ade8044" }}>
+        <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "24px", color: "#4ade80", marginBottom: "20px", textAlign: "center" }}>⚙️ Manage Tabs</div>
+
+        {/* Delete confirm dialog */}
+        {deleteConfirm && (
+          <div style={{ background: "#ff444422", border: "2px solid #ff4444", borderRadius: "16px", padding: "16px", marginBottom: "16px", textAlign: "center" }}>
+            <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "18px", color: "#ff4444", marginBottom: "8px" }}>⚠️ Delete "{deleteConfirm}"?</div>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>This will also delete all animals in this tab!</div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: "10px", color: "#fff", padding: "8px", cursor: "pointer", fontFamily: "'Nunito', sans-serif" }}>Cancel</button>
+              <button onClick={confirmDelete} style={{ flex: 1, background: "#ff444444", border: "1px solid #ff4444", borderRadius: "10px", color: "#ff4444", padding: "8px", cursor: "pointer", fontFamily: "'Fredoka One', cursive" }}>Yes, Delete</button>
+            </div>
+          </div>
+        )}
+
+        {/* Existing tabs */}
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: "13px", color: "#888", fontWeight: "700", marginBottom: "8px" }}>CURRENT TABS</div>
+          {localTabs.map(tab => (
+            <div key={tab.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: `${tab.accent}11`, border: `1px solid ${tab.accent}44`, borderRadius: "12px", padding: "10px 14px", marginBottom: "8px" }}>
+              <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "18px", color: tab.accent }}>{tab.icon} {tab.name}</div>
+              <button onClick={() => handleDelete(tab.name)} style={{ background: "#ff444422", border: "1px solid #ff4444", borderRadius: "8px", color: "#ff4444", padding: "4px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "'Nunito', sans-serif", fontWeight: "700" }}>🗑️ Delete</button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new tab */}
+        <div style={{ borderTop: "1px solid #ffffff11", paddingTop: "20px" }}>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: "13px", color: "#888", fontWeight: "700", marginBottom: "12px" }}>ADD NEW TAB</div>
+          
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+            <input value={newIcon} onChange={e => setNewIcon(e.target.value)} placeholder="🦎" maxLength={2}
+              style={{ width: "60px", background: "#0a0a1a", border: "1px solid #4ade8044", borderRadius: "10px", padding: "10px", color: "#fff", fontFamily: "'Nunito', sans-serif", fontSize: "22px", textAlign: "center", outline: "none" }} />
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Reptiles"
+              style={{ flex: 1, background: "#0a0a1a", border: "1px solid #4ade8044", borderRadius: "10px", padding: "10px 14px", color: "#fff", fontFamily: "'Nunito', sans-serif", fontSize: "14px", outline: "none" }} />
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: "12px", color: "#888", marginBottom: "6px" }}>Pick a color:</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {TAB_COLOR_PRESETS.map((preset, i) => (
+                <button key={i} onClick={() => setSelectedColor(i)} style={{ width: "32px", height: "32px", borderRadius: "50%", background: preset.accent, border: selectedColor === i ? "3px solid #fff" : "3px solid transparent", cursor: "pointer" }} />
+              ))}
+            </div>
+          </div>
+
+          <button onClick={handleAdd} style={{ width: "100%", background: "linear-gradient(135deg, #4ade80, #bbf7d0)", border: "none", borderRadius: "12px", color: "#000", padding: "12px", cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "16px", marginBottom: "12px" }}>
+            ✨ Add Tab
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+          <button onClick={onClose} style={{ flex: 1, background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: "12px", color: "#fff", padding: "12px", cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "16px" }}>Cancel</button>
+          <button onClick={() => onSave(localTabs)} style={{ flex: 2, background: "linear-gradient(135deg, #4ade80, #bbf7d0)", border: "none", borderRadius: "12px", color: "#000", padding: "12px", cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "16px" }}>💾 Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WildlifeJournal() {
+  const [tabs, setTabs] = useState(DEFAULT_TABS);
   const [activeCategory, setActiveCategory] = useState("Birds");
   const [animals, setAnimals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showTabsModal, setShowTabsModal] = useState(false);
   const [editAnimal, setEditAnimal] = useState(null);
-  const colors = CATEGORY_COLORS[activeCategory];
+  const colors = getTabColors(tabs, activeCategory);
   const filtered = animals.filter(a => a.category === activeCategory);
   const totalSpecies = new Set(animals.map(a => a.name)).size;
 
   useEffect(() => {
-    const loadAnimals = async () => {
+    const loadData = async () => {
+      // Load tabs
+      const tabsDoc = await getDoc(doc(db, "settings", "tabs"));
+      if (tabsDoc.exists()) {
+        setTabs(tabsDoc.data().tabs);
+      }
+      // Load animals
       const snapshot = await getDocs(collection(db, "animals"));
       if (snapshot.empty) {
         const seeded = [];
@@ -356,8 +468,27 @@ export default function WildlifeJournal() {
       }
       setLoading(false);
     };
-    loadAnimals();
+    loadData();
   }, []);
+
+  const handleSaveTabs = async (newTabs) => {
+    // Delete animals in removed tabs
+    const removedTabNames = tabs.filter(t => !newTabs.find(n => n.name === t.name)).map(t => t.name);
+    for (const animal of animals) {
+      if (removedTabNames.includes(animal.category)) {
+        await deleteDoc(doc(db, "animals", animal.id));
+      }
+    }
+    setAnimals(prev => prev.filter(a => !removedTabNames.includes(a.category)));
+    // Save new tabs to Firestore
+    await setDoc(doc(db, "settings", "tabs"), { tabs: newTabs });
+    setTabs(newTabs);
+    // If active category was deleted, switch to first tab
+    if (!newTabs.find(t => t.name === activeCategory)) {
+      setActiveCategory(newTabs[0]?.name || "");
+    }
+    setShowTabsModal(false);
+  };
 
   const handleSave = async (animal) => {
     const { id, ...data } = animal;
@@ -423,11 +554,11 @@ export default function WildlifeJournal() {
 
           {/* Stats */}
           <div style={{ display: "inline-flex", gap: "20px", background: "#ffffff08", border: "1px solid #ffffff11", borderRadius: "20px", padding: "10px 24px", marginBottom: "24px" }}>
-            {CATEGORIES.map(cat => (
-              <div key={cat} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "20px" }}>{CATEGORY_ICONS[cat]}</div>
-                <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "18px", color: CATEGORY_COLORS[cat].accent }}>{animals.filter(a => a.category === cat).length}</div>
-                <div style={{ fontSize: "10px", color: "#666" }}>{cat}</div>
+            {tabs.map(tab => (
+              <div key={tab.name} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "20px" }}>{tab.icon}</div>
+                <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "18px", color: tab.accent }}>{animals.filter(a => a.category === tab.name).length}</div>
+                <div style={{ fontSize: "10px", color: "#666" }}>{tab.name}</div>
               </div>
             ))}
             <div style={{ textAlign: "center", borderLeft: "1px solid #ffffff11", paddingLeft: "20px" }}>
@@ -438,15 +569,16 @@ export default function WildlifeJournal() {
           </div>
 
           {/* Tabs */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
-            {CATEGORIES.map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ background: activeCategory === cat ? `linear-gradient(135deg, ${CATEGORY_COLORS[cat].accent}, ${CATEGORY_COLORS[cat].light})` : "#ffffff11", border: activeCategory === cat ? "none" : `1px solid ${CATEGORY_COLORS[cat].accent}44`, borderRadius: "20px", padding: "10px 22px", color: activeCategory === cat ? "#000" : CATEGORY_COLORS[cat].accent, cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "16px", transition: "all 0.3s ease", transform: activeCategory === cat ? "scale(1.05)" : "scale(1)" }}>{CATEGORY_ICONS[cat]} {cat}</button>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {tabs.map(tab => (
+              <button key={tab.name} onClick={() => setActiveCategory(tab.name)} style={{ background: activeCategory === tab.name ? `linear-gradient(135deg, ${tab.accent}, ${tab.light})` : "#ffffff11", border: activeCategory === tab.name ? "none" : `1px solid ${tab.accent}44`, borderRadius: "20px", padding: "10px 22px", color: activeCategory === tab.name ? "#000" : tab.accent, cursor: "pointer", fontFamily: "'Fredoka One', cursive", fontSize: "16px", transition: "all 0.3s ease", transform: activeCategory === tab.name ? "scale(1.05)" : "scale(1)" }}>{tab.icon} {tab.name}</button>
             ))}
+            <button onClick={() => setShowTabsModal(true)} style={{ background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: "20px", padding: "10px 14px", color: "#888", cursor: "pointer", fontSize: "16px", transition: "all 0.3s ease" }}>⚙️</button>
           </div>
         </div>
 
         {/* Butterfly Recipe */}
-        {activeCategory === "Butterflies" && (
+        {tabs.find(t => t.name === activeCategory && t.name === "Butterflies") && (
           <div style={{ maxWidth: "900px", margin: "0 auto 20px", padding: "0 16px" }}>
             <div style={{ background: "linear-gradient(135deg, #2a1a3a, #1a0a2a)", border: "2px solid #c084fc66", borderRadius: "20px", padding: "20px 24px", boxShadow: "0 8px 32px #c084fc22" }}>
               <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "20px", color: "#c084fc", marginBottom: "14px" }}>🦋 Butterfly Feeder Recipe</div>
@@ -475,14 +607,14 @@ export default function WildlifeJournal() {
         <div style={{ maxWidth: "900px", margin: "0 auto", padding: "0 16px" }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
-              <div style={{ fontSize: "64px", marginBottom: "16px" }}>{CATEGORY_ICONS[activeCategory]}</div>
+              <div style={{ fontSize: "64px", marginBottom: "16px" }}>{getTabIcon(tabs, activeCategory)}</div>
               <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "22px", color: colors.accent, marginBottom: "8px" }}>No {activeCategory} yet!</div>
               <div style={{ fontSize: "14px" }}>Add your first {activeCategory.slice(0, -1).toLowerCase()} to get started!</div>
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "16px", marginBottom: "24px" }}>
               {filtered.map(animal => (
-                <AnimalCard key={animal.id} animal={animal} onEdit={(a) => { setEditAnimal(a); setShowModal(true); }} onDelete={handleDelete} />
+                <AnimalCard key={animal.id} animal={animal} onEdit={(a) => { setEditAnimal(a); setShowModal(true); }} onDelete={handleDelete} tabs={tabs} />
               ))}
             </div>
           )}
@@ -491,12 +623,13 @@ export default function WildlifeJournal() {
 
           <div style={{ textAlign: "center" }}>
             <button onClick={() => { setEditAnimal(null); setShowModal(true); }} style={{ background: `linear-gradient(135deg, ${colors.accent}, ${colors.light})`, border: "none", borderRadius: "50px", padding: "16px 36px", color: "#000", fontFamily: "'Fredoka One', cursive", fontSize: "20px", cursor: "pointer", boxShadow: `0 8px 32px ${colors.accent}44` }}>
-              {CATEGORY_ICONS[activeCategory]} Add New {activeCategory.slice(0, -1)}!
+              {getTabIcon(tabs, activeCategory)} Add New {activeCategory.slice(0, -1)}!
             </button>
           </div>
         </div>
 
-        {showModal && <AddEditModal animal={editAnimal} category={activeCategory} onSave={handleSave} onClose={() => { setShowModal(false); setEditAnimal(null); }} />}
+        {showModal && <AddEditModal animal={editAnimal} category={activeCategory} onSave={handleSave} onClose={() => { setShowModal(false); setEditAnimal(null); }} tabs={tabs} />}
+        {showTabsModal && <ManageTabsModal tabs={tabs} onSave={handleSaveTabs} onClose={() => setShowTabsModal(false)} />}
       </div>
     </>
   );
