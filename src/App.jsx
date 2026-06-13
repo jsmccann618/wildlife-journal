@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { db } from "./firebase";
+import { db, storage } from "./firebase";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
@@ -65,6 +66,14 @@ function compressImage(dataUrl, maxWidth = 800) {
     };
     img.src = dataUrl;
   });
+}
+
+async function uploadImage(dataUrl, path) {
+  if (!dataUrl || dataUrl.startsWith("http")) return dataUrl;
+  const compressed = await compressImage(dataUrl);
+  const storageRef = ref(storage, path);
+  await uploadString(storageRef, compressed, "data_url");
+  return await getDownloadURL(storageRef);
 }
 
 function Lightbox({ photos, startIndex, onClose }) {
@@ -353,11 +362,29 @@ export default function WildlifeJournal() {
   const handleSave = async (animal) => {
     const { id, ...data } = animal;
     const exists = animals.find(a => a.id === id);
+    const animalId = exists ? id : `animal_${Date.now()}`;
+
+    // Upload main image to Storage if it's a new base64 image
+    if (data.image && data.image.startsWith("data:")) {
+      data.image = await uploadImage(data.image, `animals/${animalId}/main.jpg`);
+    }
+
+    // Upload extra photos
+    if (data.extraPhotos && data.extraPhotos.length > 0) {
+      data.extraPhotos = await Promise.all(
+        data.extraPhotos.map((photo, i) =>
+          photo.startsWith("data:")
+            ? uploadImage(photo, `animals/${animalId}/extra_${i}.jpg`)
+            : photo
+        )
+      );
+    }
+
     if (exists) {
       await updateDoc(doc(db, "animals", id), data);
-      setAnimals(prev => prev.map(a => a.id === id ? animal : a));
+      setAnimals(prev => prev.map(a => a.id === id ? { ...data, id } : a));
     } else {
-      const docRef = await addDoc(collection(db, "animals"), data);
+      const docRef = await addDoc(collection(db, "animals"), { ...data, animalId });
       setAnimals(prev => [...prev, { ...data, id: docRef.id }]);
     }
     setShowModal(false);
