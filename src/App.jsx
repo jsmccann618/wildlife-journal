@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "./firebase";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
@@ -47,6 +49,22 @@ const FUN_FACTS = {
 function getRandomFact(category) {
   const facts = FUN_FACTS[category];
   return facts[Math.floor(Math.random() * facts.length)];
+}
+
+function compressImage(dataUrl, maxWidth = 800) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, maxWidth / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.src = dataUrl;
+  });
 }
 
 function Lightbox({ photos, startIndex, onClose }) {
@@ -172,8 +190,9 @@ function AddEditModal({ animal, category, onSave, onClose }) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setForm(f => ({ ...f, image: ev.target.result }));
+    reader.onload = async (ev) => {
+      const compressed = await compressImage(ev.target.result);
+      setForm(f => ({ ...f, image: compressed }));
     };
     reader.readAsDataURL(file);
   };
@@ -182,7 +201,10 @@ function AddEditModal({ animal, category, onSave, onClose }) {
     const files = Array.from(e.target.files);
     files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (ev) => setForm(f => ({ ...f, extraPhotos: [...(f.extraPhotos || []), ev.target.result] }));
+      reader.onload = async (ev) => {
+        const compressed = await compressImage(ev.target.result);
+        setForm(f => ({ ...f, extraPhotos: [...(f.extraPhotos || []), compressed] }));
+      };
       reader.readAsDataURL(file);
     });
   };
@@ -293,28 +315,73 @@ function AddEditModal({ animal, category, onSave, onClose }) {
   );
 }
 
+const SEED_ANIMALS = [
+  { name: "American Robin", nickname: "", scientificName: "Turdus migratorius", category: "Birds", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Peanut Butter Suet"], usesBath: true, notes: "Super special — uses the feeder AND the bird bath! Very unusual for a robin.", image: null, extraPhotos: [], funFact: "Robins can hear earthworms moving underground." },
+  { name: "Mourning Dove", nickname: "Professor Poopy Pants", scientificName: "Zenaida macroura", category: "Birds", firstSeen: "Before 2026", frequency: "Daily", favoriteFood: ["Mixed Seed"], usesBath: false, notes: "Partner showed up too — was likely nesting nearby this whole time! 🥹", image: null, extraPhotos: [], funFact: "Mourning doves mate for life." },
+  { name: "Eastern Gray Squirrel", nickname: "", scientificName: "Sciurus carolinensis", category: "Critters", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Sunflower Seeds"], usesBath: false, notes: "Was caught soaking its head in the brand new bird bath on day one!", image: null, extraPhotos: [], funFact: "Squirrels forget where they bury about half their nuts!" },
+];
+
 export default function WildlifeJournal() {
   const [activeCategory, setActiveCategory] = useState("Birds");
-  const [animals, setAnimals] = useState([
-    { id: 1, name: "American Robin", nickname: "", scientificName: "Turdus migratorius", category: "Birds", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Peanut Butter Suet"], usesBath: true, notes: "Super special — uses the feeder AND the bird bath! Very unusual for a robin.", image: null, extraPhotos: [], funFact: "Robins can hear earthworms moving underground." },
-    { id: 2, name: "Mourning Dove", nickname: "Professor Poopy Pants", scientificName: "Zenaida macroura", category: "Birds", firstSeen: "Before 2026", frequency: "Daily", favoriteFood: ["Mixed Seed"], usesBath: false, notes: "Partner showed up too — was likely nesting nearby this whole time! 🥹", image: null, extraPhotos: [], funFact: "Mourning doves mate for life." },
-    { id: 3, name: "Eastern Gray Squirrel", nickname: "", scientificName: "Sciurus carolinensis", category: "Critters", firstSeen: "June 2, 2026", frequency: "Daily", favoriteFood: ["Sunflower Seeds"], usesBath: false, notes: "Was caught soaking its head in the brand new bird bath on day one!", image: null, extraPhotos: [], funFact: "Squirrels forget where they bury about half their nuts!" },
-  ]);
+  const [animals, setAnimals] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editAnimal, setEditAnimal] = useState(null);
   const colors = CATEGORY_COLORS[activeCategory];
   const filtered = animals.filter(a => a.category === activeCategory);
   const totalSpecies = new Set(animals.map(a => a.name)).size;
 
-  const handleSave = (animal) => {
-    setAnimals(prev => prev.find(a => a.id === animal.id) ? prev.map(a => a.id === animal.id ? animal : a) : [...prev, animal]);
+  useEffect(() => {
+    const loadAnimals = async () => {
+      const snapshot = await getDocs(collection(db, "animals"));
+      if (snapshot.empty) {
+        const seeded = [];
+        for (const seed of SEED_ANIMALS) {
+          const docRef = await addDoc(collection(db, "animals"), seed);
+          seeded.push({ ...seed, id: docRef.id });
+        }
+        setAnimals(seeded);
+      } else {
+        const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAnimals(loaded);
+      }
+      setLoading(false);
+    };
+    loadAnimals();
+  }, []);
+
+  const handleSave = async (animal) => {
+    const { id, ...data } = animal;
+    const exists = animals.find(a => a.id === id);
+    if (exists) {
+      await updateDoc(doc(db, "animals", id), data);
+      setAnimals(prev => prev.map(a => a.id === id ? animal : a));
+    } else {
+      const docRef = await addDoc(collection(db, "animals"), data);
+      setAnimals(prev => [...prev, { ...data, id: docRef.id }]);
+    }
     setShowModal(false);
     setEditAnimal(null);
   };
 
-  const handleDelete = (id) => {
-    if (confirm("Remove this entry from your journal?")) setAnimals(prev => prev.filter(a => a.id !== id));
+  const handleDelete = async (id) => {
+    if (confirm("Remove this entry from your journal?")) {
+      await deleteDoc(doc(db, "animals", id));
+      setAnimals(prev => prev.filter(a => a.id !== id));
+    }
   };
+
+  if (loading) {
+    return (
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+        <div style={{ minHeight: "100vh", background: "#0a0a0f", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'Nunito', sans-serif" }}>
+          <div style={{ fontSize: "48px", marginBottom: "12px" }}>🌿</div>
+          <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: "20px", color: "#4ade80" }}>Loading your journal...</div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
