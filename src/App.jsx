@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const OPENROUTER_API_KEY = "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";
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 const AI_MODEL = "meta-llama/llama-4-maverick:free";
 
 const CATEGORIES = ["Birds", "Critters", "Butterflies"];
@@ -51,46 +51,37 @@ function getRandomFact(category) {
   return facts[Math.floor(Math.random() * facts.length)];
 }
 
+async function compressImage(dataUrl, maxWidth = 800) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, maxWidth / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.src = dataUrl;
+  });
+}
+
 async function analyzeImageWithAI(base64Image, category) {
-  const categoryHint = category === "Birds" ? "bird" : category === "Critters" ? "small mammal, squirrel, chipmunk, or critter" : "butterfly or insect";
-  const prompt = `You are a wildlife identification expert. Look at this photo and identify what ${categoryHint} species this is.
+  const compressed = await compressImage(base64Image);
 
-Respond ONLY with a valid JSON object in this exact format, no other text:
-{
-  "species": "Common name of the species",
-  "scientificName": "Scientific name",
-  "confidence": "High/Medium/Low",
-  "funFact": "One fascinating and specific fun fact about this exact species in one sentence",
-  "description": "Brief 1 sentence description of key identifying features you can see",
-  "foodTip": "One specific food or feeding tip for attracting this species"
-}`;
-
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("/api/identify", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://wildlife-journal.vercel.app",
-      "X-Title": "Wildlife Journal",
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 400,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: compressed } },
-        ],
-      }],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: compressed, category }),
   });
 
-  if (!response.ok) throw new Error(`API error: ${response.status}`);
-  const data = await response.json();
-  const text = data.choices[0].message.content;
-  const clean = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(clean);
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || `API error: ${response.status}`);
+  }
+
+  return await response.json();
 }
 
 function Lightbox({ photos, startIndex, onClose }) {
