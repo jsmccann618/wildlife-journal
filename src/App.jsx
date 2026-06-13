@@ -259,7 +259,7 @@ function AddEditModal({ animal, category, onSave, onClose }) {
         const result = await analyzeImageWithAI(dataUrl, category);
         setAiResult(result);
       } catch (err) {
-        setAiError("AI couldn't identify this one. Fill in details manually!");
+        setAiError("Error: " + err.message);
       } finally {
         setAiLoading(false);
       }
