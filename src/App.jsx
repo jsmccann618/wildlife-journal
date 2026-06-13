@@ -292,6 +292,13 @@ function AddEditModal({ animal, category, onSave, onClose, tabs }) {
           </div>
         ))}
 
+        {/* Fun Fact */}
+        <div style={{ marginBottom: "14px" }}>
+          <label style={{ color: colors.light, fontSize: "13px", fontFamily: "'Nunito', sans-serif", fontWeight: "700", display: "block", marginBottom: "4px" }}>💡 Fun Fact</label>
+          <textarea value={form.funFact || ""} onChange={e => setForm(f => ({ ...f, funFact: e.target.value }))} placeholder="e.g. Blue Jays can carry up to 5 acorns at once!" rows={3}
+            style={{ width: "100%", background: "#0a0a1a", border: `1px solid ${colors.accent}44`, borderRadius: "10px", padding: "10px 14px", color: "#fff", fontFamily: "'Nunito', sans-serif", fontSize: "14px", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+        </div>
+
         {/* Frequency */}
         <div style={{ marginBottom: "14px" }}>
           <label style={{ color: colors.light, fontSize: "13px", fontFamily: "'Nunito', sans-serif", fontWeight: "700", display: "block", marginBottom: "6px" }}>How often do you see it?</label>
