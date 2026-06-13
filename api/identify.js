@@ -34,7 +34,7 @@ Respond ONLY with a valid JSON object in this exact format, no other text:
         "X-Title": "Wildlife Journal",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-4-maverick:free",
+        model: "google/gemma-4-31b-it:free",
         max_tokens: 400,
         messages: [
           {
